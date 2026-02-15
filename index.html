@@ -1,39 +1,78 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>GitHub Global Mesh</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GitHub Global Multi</title>
     <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
     <style>
-        body { margin: 0; background: #111; color: #00ff00; font-family: sans-serif; overflow: hidden; }
-        #status { position: fixed; top: 10px; left: 10px; padding: 10px; background: rgba(0,0,0,0.8); border: 1px solid #00ff00; z-index: 100; }
-        .player { 
-            position: absolute; width: 30px; height: 30px; 
-            border: 2px solid #00ff00; border-radius: 50%;
-            transition: transform 0.1s linear; pointer-events: none;
-            display: flex; align-items: center; justify-content: center; font-size: 8px;
-        }
-        #me { background: #fff; box-shadow: 0 0 15px #fff; border-color: #fff; }
+        body { margin: 0; background: #000; color: #0f0; font-family: monospace; overflow: hidden; touch-action: none; }
+        #status { position: fixed; top: 10px; left: 10px; background: rgba(0,0,0,0.9); padding: 8px; border: 1px solid #0f0; z-index: 100; font-size: 12px; }
+        .player { position: absolute; width: 40px; height: 40px; border: 2px solid #0f0; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; pointer-events: none; }
+        #me { border-color: #fff; background: rgba(255,255,255,0.2); z-index: 10; }
     </style>
 </head>
 <body>
 
-    <div id="status">
-        <b>Status:</b> <span id="state">Connecting to Mesh...</span><br>
-        <b>Online Now:</b> <span id="count">1</span>
-    </div>
+<div id="status">
+    SIGNAL: <span id="state">SEARCHING...</span><br>
+    PLAYERS: <span id="count">1</span>
+</div>
 
-    <div id="world">
-        <div id="me" class="player">ME</div>
-    </div>
+<div id="world">
+    <div id="me" class="player">ME</div>
+</div>
 
-    <script>
-        // 1. Initialize Gun with public relay peers
-        const gun = Gun([
-            'https://gun-manhattan.herokuapp.com/gun',
-            'https://peer.wall.org/gun'
-        ]);
+<script>
+    // These are the most stable "Relays" available in 2026
+    const gun = Gun([
+        'https://gun-manhattan.herokuapp.com/gun',
+        'https://peer.wall.org/gun',
+        'https://gundb-relay.herokuapp.com/gun'
+    ]);
+
+    const myID = "P_" + Math.random().toString(36).substr(2, 5);
+    const players = {};
+    const world = document.getElementById('world');
+    const lobby = gun.get('universal-lobby-v99'); // Unique channel
+
+    // Handle BOTH Mouse and Touch for mobile compatibility
+    function move(e) {
+        const x = (e.touches ? e.touches[0].clientX : e.clientX) - 20;
+        const y = (e.touches ? e.touches[0].clientY : e.clientY) - 20;
         
-        const myID = "user_" + Math.floor(Math.random() * 100000);
+        document.getElementById('me').style.transform = `translate(${x}px, ${y}px)`;
+        lobby.get(myID).put({x, y, t: Date.now()});
+    }
+
+    window.addEventListener('mousemove', move);
+    window.addEventListener('touchmove', move);
+
+    // Sync everyone else
+    lobby.map().on((data, id) => {
+        if (!data || id === myID) return;
+
+        // If no update for 8 seconds, remove them
+        if (Date.now() - data.t > 8000) {
+            if (players[id]) { players[id].remove(); delete players[id]; }
+            return;
+        }
+
+        if (!players[id]) {
+            const p = document.createElement('div');
+            p.className = 'player';
+            p.innerText = "USER";
+            world.appendChild(p);
+            players[id] = p;
+        }
+
+        players[id].style.transform = `translate(${data.x}px, ${data.y}px)`;
+        document.getElementById('state').innerText = "STABLE";
+        document.getElementById('count').innerText = Object.keys(players).length + 1;
+    });
+</script>
+</body>
+</html>
         const playerMap = {};
         const world = document.getElementById('world');
         const lobby = gun.get('global-github-lobby-2026');
