@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>GitHub Global Multi</title>
+    <title>Global Realtime Mesh</title>
     <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
     <style>
         body { margin: 0; background: #000; color: #0f0; font-family: monospace; overflow: hidden; touch-action: none; }
-        #status { position: fixed; top: 10px; left: 10px; background: rgba(0,0,0,0.9); padding: 8px; border: 1px solid #0f0; z-index: 100; font-size: 12px; }
-        .player { position: absolute; width: 40px; height: 40px; border: 2px solid #0f0; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; pointer-events: none; }
-        #me { border-color: #fff; background: rgba(255,255,255,0.2); z-index: 10; }
+        #status { position: fixed; top: 10px; left: 10px; background: rgba(0,0,0,0.9); padding: 8px; border: 1px solid #0f0; z-index: 100; pointer-events: none; }
+        .player { position: absolute; width: 40px; height: 40px; border: 2px solid #0f0; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: transform 0.05s linear; pointer-events: none; }
+        #me { border-color: #fff; background: rgba(0, 255, 204, 0.3); z-index: 10; }
     </style>
 </head>
 <body>
 
 <div id="status">
-    SIGNAL: <span id="state">SEARCHING...</span><br>
+    SIGNAL: <span id="state">WAITING...</span><br>
     PLAYERS: <span id="count">1</span>
 </div>
 
@@ -24,100 +24,74 @@
 </div>
 
 <script>
-    // These are the most stable "Relays" available in 2026
-    const gun = Gun([
-        'https://gun-manhattan.herokuapp.com/gun',
-        'https://peer.wall.org/gun',
-        'https://gundb-relay.herokuapp.com/gun'
-    ]);
+    // 1. Force a direct connection to multiple global relays
+    const gun = Gun({
+        peers: [
+            'https://gun-manhattan.herokuapp.com/gun',
+            'https://peer.wall.org/gun',
+            'https://gundb-relay.herokuapp.com/gun'
+        ],
+        localStorage: false // This prevents old data from "sticking"
+    });
 
     const myID = "P_" + Math.random().toString(36).substr(2, 5);
     const players = {};
     const world = document.getElementById('world');
-    const lobby = gun.get('universal-lobby-v99'); // Unique channel
+    const lobby = gun.get('global-github-v2026-sync'); 
 
-    // Handle BOTH Mouse and Touch for mobile compatibility
+    // 2. Real-time Movement (Broadcasting)
     function move(e) {
         const x = (e.touches ? e.touches[0].clientX : e.clientX) - 20;
         const y = (e.touches ? e.touches[0].clientY : e.clientY) - 20;
         
         document.getElementById('me').style.transform = `translate(${x}px, ${y}px)`;
+        
+        // This sends the data to everyone else instantly
         lobby.get(myID).put({x, y, t: Date.now()});
     }
 
     window.addEventListener('mousemove', move);
     window.addEventListener('touchmove', move);
 
-    // Sync everyone else
+    // 3. Real-time Listening (Receiving)
+    // .map().on() is the "Magic" that stops you from needing to refresh
     lobby.map().on((data, id) => {
         if (!data || id === myID) return;
 
-        // If no update for 8 seconds, remove them
-        if (Date.now() - data.t > 8000) {
-            if (players[id]) { players[id].remove(); delete players[id]; }
+        // Auto-remove players who haven't moved in 10 seconds
+        if (Date.now() - data.t > 10000) {
+            if (players[id]) { 
+                players[id].remove(); 
+                delete players[id]; 
+                updateCount();
+            }
             return;
         }
 
+        // If player is new, create them
         if (!players[id]) {
             const p = document.createElement('div');
             p.className = 'player';
-            p.innerText = "USER";
+            p.innerText = "LIVE";
             world.appendChild(p);
             players[id] = p;
+            updateCount();
         }
 
+        // Update their position instantly
         players[id].style.transform = `translate(${data.x}px, ${data.y}px)`;
-        document.getElementById('state').innerText = "STABLE";
-        document.getElementById('count').innerText = Object.keys(players).length + 1;
+        document.getElementById('state').innerText = "LIVE SYNCING";
     });
+
+    function updateCount() {
+        document.getElementById('count').innerText = Object.keys(players).length + 1;
+    }
+
+    // Keep the connection alive
+    setInterval(() => {
+        lobby.get(myID).get('t').put(Date.now());
+    }, 5000);
+
 </script>
-</body>
-</html>
-        const playerMap = {};
-        const world = document.getElementById('world');
-        const lobby = gun.get('global-github-lobby-2026');
-
-        // 2. Track Mouse Movement
-        window.addEventListener('mousemove', (e) => {
-            const x = e.clientX - 15;
-            const y = e.clientY - 15;
-            
-            // Move local player
-            document.getElementById('me').style.transform = `translate(${x}px, ${y}px)`;
-
-            // Send to GitHub Global Mesh
-            lobby.get(myID).put({ x: x, y: y, time: Date.now() });
-        });
-
-        // 3. Listen for Everyone Else
-        lobby.map().on((data, id) => {
-            if (!data || id === myID) return;
-
-            // Remove players inactive for more than 5 seconds
-            if (Date.now() - data.time > 5000) {
-                if (playerMap[id]) {
-                    playerMap[id].remove();
-                    delete playerMap[id];
-                }
-                return;
-            }
-
-            // Create remote player if they don't exist
-            if (!playerMap[id]) {
-                const p = document.createElement('div');
-                p.className = 'player';
-                p.innerText = "PLAYER";
-                world.appendChild(p);
-                playerMap[id] = p;
-            }
-
-            // Update remote position
-            playerMap[id].style.transform = `translate(${data.x}px, ${data.y}px)`;
-            
-            // Update UI
-            document.getElementById('state').innerText = "CONNECTED";
-            document.getElementById('count').innerText = Object.keys(playerMap).length + 1;
-        });
-    </script>
 </body>
 </html>
